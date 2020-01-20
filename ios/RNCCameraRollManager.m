@@ -46,7 +46,7 @@ RCT_ENUM_CONVERTER(PHAssetCollectionSubtype, (@{
 {
   // This is not exhaustive in terms of supported media type predicates; more can be added in the future
   NSString *const lowercase = [mediaType lowercaseString];
-  
+
   if ([lowercase isEqualToString:@"photos"]) {
     PHFetchOptions *const options = [PHFetchOptions new];
     options.predicate = [NSPredicate predicateWithFormat:@"mediaType = %d", PHAssetMediaTypeImage];
@@ -142,7 +142,7 @@ RCT_EXPORT_METHOD(saveToCameraRoll:(NSURLRequest *)request
   };
   void (^saveWithOptions)(void) = ^void() {
     if (![options[@"album"] isEqualToString:@""]) {
-  
+
       PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
       fetchOptions.predicate = [NSPredicate predicateWithFormat:@"title = %@", options[@"album"] ];
       collection = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum
@@ -226,30 +226,30 @@ RCT_EXPORT_METHOD(getPhotos:(NSDictionary *)params
   NSString *const groupTypes = [[RCTConvert NSString:params[@"groupTypes"]] lowercaseString];
   NSString *const mediaType = [RCTConvert NSString:params[@"assetType"]];
   NSArray<NSString *> *const mimeTypes = [RCTConvert NSStringArray:params[@"mimeTypes"]];
-  
+
   // If groupTypes is "all", we want to fetch the SmartAlbum "all photos". Otherwise, all
   // other groupTypes values require the "album" collection type.
   PHAssetCollectionType const collectionType = ([groupTypes isEqualToString:@"all"]
                                                 ? PHAssetCollectionTypeSmartAlbum
                                                 : PHAssetCollectionTypeAlbum);
   PHAssetCollectionSubtype const collectionSubtype = [RCTConvert PHAssetCollectionSubtype:groupTypes];
-  
+
   // Predicate for fetching assets within a collection
   PHFetchOptions *const assetFetchOptions = [RCTConvert PHFetchOptionsFromMediaType:mediaType];
   assetFetchOptions.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:NO]];
-  
+
   BOOL __block foundAfter = NO;
   BOOL __block hasNextPage = NO;
   BOOL __block resolvedPromise = NO;
   NSMutableArray<NSDictionary<NSString *, id> *> *assets = [NSMutableArray new];
-  
+
   // Filter collection name ("group")
   PHFetchOptions *const collectionFetchOptions = [PHFetchOptions new];
   collectionFetchOptions.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"endDate" ascending:NO]];
   if (groupName != nil) {
     collectionFetchOptions.predicate = [NSPredicate predicateWithFormat:[NSString stringWithFormat:@"localizedTitle == '%@'", groupName]];
   }
-  
+
   BOOL __block stopCollections_;
   NSString __block *currentCollectionName;
 
@@ -363,12 +363,53 @@ RCT_EXPORT_METHOD(getPhotos:(NSDictionary *)params
   });
 }
 
+RCT_EXPORT_METHOD(countPhotos:(NSDictionary *)params
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  checkPhotoLibraryConfig();
+
+  NSString *const groupName = [RCTConvert NSString:params[@"groupName"]];
+  NSString *const groupTypes = [[RCTConvert NSString:params[@"groupTypes"]] lowercaseString];
+  NSString *const mediaType = [RCTConvert NSString:params[@"assetType"]];
+  NSArray<NSString *> *const mimeTypes = [RCTConvert NSStringArray:params[@"mimeTypes"]];
+
+  // If groupTypes is "all", we want to fetch the SmartAlbum "all photos". Otherwise, all
+  // other groupTypes values require the "album" collection type.
+  PHAssetCollectionType const collectionType = ([groupTypes isEqualToString:@"all"]
+                                                ? PHAssetCollectionTypeSmartAlbum
+                                                : PHAssetCollectionTypeAlbum);
+  PHAssetCollectionSubtype const collectionSubtype = [RCTConvert PHAssetCollectionSubtype:groupTypes];
+
+  // Predicate for fetching assets within a collection
+  PHFetchOptions *const assetFetchOptions = [RCTConvert PHFetchOptionsFromMediaType:mediaType];
+
+  // Filter collection name ("group")
+  PHFetchOptions *const collectionFetchOptions = [PHFetchOptions new];
+  if (groupName != nil) {
+    collectionFetchOptions.predicate = [NSPredicate predicateWithFormat:[NSString stringWithFormat:@"localizedTitle == '%@'", groupName]];
+  }
+
+  if ([groupTypes isEqualToString:@"all"]) {
+    PHFetchResult <PHAsset *> *const assetFetchResult = [PHAsset fetchAssetsWithOptions: assetFetchOptions];
+      resolve(@{ @"count": [NSNumber numberWithInt:[assetFetchResult count]] });
+  } else {
+    PHFetchResult<PHAssetCollection *> *const assetCollectionFetchResult = [PHAssetCollection fetchAssetCollectionsWithType:collectionType subtype:collectionSubtype options:collectionFetchOptions];
+    [assetCollectionFetchResult enumerateObjectsUsingBlock:^(PHAssetCollection * _Nonnull assetCollection, NSUInteger collectionIdx, BOOL * _Nonnull stopCollections) {
+      // Enumerate assets within the collection
+      PHFetchResult<PHAsset *> *const assetsFetchResult = [PHAsset fetchAssetsInAssetCollection:assetCollection options:assetFetchOptions];
+      NSString* currentCollectionName = [assetCollection localizedTitle];
+      resolve(@{ @"count": [NSNumber numberWithInt:[assetsFetchResult count]] });
+    }];
+  }
+}
+
 RCT_EXPORT_METHOD(deletePhotos:(NSArray<NSString *>*)assets
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 {
   NSMutableArray *convertedAssets = [NSMutableArray array];
-  
+
   for (NSString *asset in assets) {
     [convertedAssets addObject: [asset stringByReplacingOccurrencesOfString:@"ph://" withString:@""]];
   }

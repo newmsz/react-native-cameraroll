@@ -191,6 +191,17 @@ class CameraRoll {
     }
     return RNCCameraRoll.getPhotos(params);
   }
+
+  static countPhotos(params: GetPhotosParams): Promise<PhotoIdentifiersPage> {
+    if (!params.assetType) {
+      params.assetType = ASSET_TYPE_OPTIONS.All;
+    }
+    if (!params.groupTypes && Platform.OS !== 'android') {
+      params.groupTypes = GROUP_TYPES_OPTIONS.All;
+    }
+
+    return RNCCameraRoll.countPhotos(params);
+  }
 }
 
 module.exports = CameraRoll;
