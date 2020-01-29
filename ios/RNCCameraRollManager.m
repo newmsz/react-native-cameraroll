@@ -383,6 +383,7 @@ RCT_EXPORT_METHOD(countPhotos:(NSDictionary *)params
 
   // Predicate for fetching assets within a collection
   PHFetchOptions *const assetFetchOptions = [RCTConvert PHFetchOptionsFromMediaType:mediaType];
+  assetFetchOptions.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:NO]];
 
   // Filter collection name ("group")
   PHFetchOptions *const collectionFetchOptions = [PHFetchOptions new];
@@ -390,18 +391,35 @@ RCT_EXPORT_METHOD(countPhotos:(NSDictionary *)params
     collectionFetchOptions.predicate = [NSPredicate predicateWithFormat:[NSString stringWithFormat:@"localizedTitle == '%@'", groupName]];
   }
 
+  NSMutableArray *ret = [NSMutableArray array];
   if ([groupTypes isEqualToString:@"all"]) {
     PHFetchResult <PHAsset *> *const assetFetchResult = [PHAsset fetchAssetsWithOptions: assetFetchOptions];
-      resolve(@{ @"count": [NSNumber numberWithInt:[assetFetchResult count]] });
+      PHAsset *asset = [assetFetchResult firstObject];
+      
+      [ret addObject: @{
+        @"name": @"all",
+        @"cover": [NSString stringWithFormat:@"ph://%@", asset.localIdentifier],
+        @"count": [NSNumber numberWithInt:[assetFetchResult count]]
+      }];
   } else {
     PHFetchResult<PHAssetCollection *> *const assetCollectionFetchResult = [PHAssetCollection fetchAssetCollectionsWithType:collectionType subtype:collectionSubtype options:collectionFetchOptions];
     [assetCollectionFetchResult enumerateObjectsUsingBlock:^(PHAssetCollection * _Nonnull assetCollection, NSUInteger collectionIdx, BOOL * _Nonnull stopCollections) {
       // Enumerate assets within the collection
       PHFetchResult<PHAsset *> *const assetsFetchResult = [PHAsset fetchAssetsInAssetCollection:assetCollection options:assetFetchOptions];
       NSString* currentCollectionName = [assetCollection localizedTitle];
-      resolve(@{ @"count": [NSNumber numberWithInt:[assetsFetchResult count]] });
+      PHAsset *asset = [assetsFetchResult firstObject];
+
+      if(asset != nil) {
+        [ret addObject: @{
+          @"name": currentCollectionName,
+          @"cover": [NSString stringWithFormat:@"ph://%@", asset.localIdentifier],
+          @"count": [NSNumber numberWithInt:[assetsFetchResult count]]
+        }];
+      }
     }];
   }
+    
+  resolve(ret);
 }
 
 RCT_EXPORT_METHOD(deletePhotos:(NSArray<NSString *>*)assets
